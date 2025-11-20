@@ -21,6 +21,7 @@ let package = Package(
     .executable(name: "hc", targets: ["hc"]),
     .library(name: "HyloStandardLibrary", targets: ["StandardLibrary"]),
     .library(name: "HyloFrontEnd", targets: ["FrontEnd"]),
+    .library(name: "Driver", targets: ["Driver"]),
   ],
   dependencies: [
     .package(
