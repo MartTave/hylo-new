@@ -300,7 +300,7 @@ public struct Program: Sendable {
       case _ where isTypeDeclaration(n) || isTypeExtendingDeclaration(n):
         return false
       default:
-         s = parent(containing: p)
+        s = parent(containing: p)
       }
     }
 
@@ -562,7 +562,9 @@ public struct Program: Sendable {
     }
 
     // Otherwise, they have the same distance.
-    else { return .equal }
+    else {
+      return .equal
+    }
   }
 
   /// Returns the result of the three-way comparison of the number of ancestors of `m` and `n`.
@@ -1249,6 +1251,58 @@ extension Program {
 
 }
 
+extension Program {
+  public func getMembers(of typeIdentity: AnyTypeIdentity) -> [(
+    name: String, type: AnyTypeIdentity
+  )] {
+    var members: [(name: String, type: AnyTypeIdentity)] = []
+
+    // Handle RemoteType if present
+    let actualTypeIdentity: AnyTypeIdentity
+    if let remoteType = self.types[typeIdentity] as? RemoteType {
+      actualTypeIdentity = remoteType.projectee
+    } else {
+      actualTypeIdentity = typeIdentity
+    }
+    let actualUnderlyingTypeTree = self.types[actualTypeIdentity]
+
+    if let enumType = actualUnderlyingTypeTree as? Enum {
+      let enumDeclarationID = enumType.declaration
+      for memberDeclarationID in self[enumDeclarationID].members {
+        if let enumCaseID = self.cast(memberDeclarationID, to: EnumCaseDeclaration.self) {
+          let caseName = self.name(of: enumCaseID)?.value ?? "unknown"
+          var associatedValueTypes: [AnyTypeIdentity] = []
+          for parameterID in self[enumCaseID].parameters {
+            if let ascriptionID = self[parameterID].ascription {
+              let parameterType = self.type(assignedTo: ascriptionID)
+              associatedValueTypes.append(parameterType)
+            }
+          }
+          let caseType =
+            associatedValueTypes.isEmpty
+            ? actualTypeIdentity : self.types.tuple(of: associatedValueTypes)
+          members.append((name: caseName, type: caseType))
+        }
+      }
+    } else if let structType = actualUnderlyingTypeTree as? Struct {
+      let structDeclarationID = structType.declaration
+      self.forEachStoredProperty(of: structDeclarationID) { (variableID, _) in
+        let memberName = self.name(of: variableID)?.value ?? "unknown"
+        let memberType = self.type(assignedTo: variableID)
+        members.append((name: memberName, type: memberType))
+      }
+    } else if let tupleTypeID = self.types.cast(actualTypeIdentity, to: Tuple.self) {
+      let (elementTypes, _) = self.types.members(of: tupleTypeID)
+      for (index, elementType) in elementTypes.enumerated() {
+        members.append((name: "_\(index)", type: elementType))
+      }
+    }
+    // Add other composite types if needed
+
+    return members
+  }
+}
+
 /// A selector identifying nodes in a syntax tree.
 public indirect enum SyntaxFilter {
 
@@ -1291,7 +1345,7 @@ public indirect enum SyntaxFilter {
 }
 
 /// A syntax visitor that enumerates the immediate children of a node.
-fileprivate struct ChildrenEnumerator: SyntaxVisitor {
+private struct ChildrenEnumerator: SyntaxVisitor {
 
   /// The node whose children are being enumerated.
   fileprivate var parent: AnySyntaxIdentity
